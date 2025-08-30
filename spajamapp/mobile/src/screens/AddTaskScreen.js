@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, TextInput, TouchableOpacity, Text } from 'react-native';
 
-const AddTodo = ({ onAdd }) => {
+function AddTaskScreen() {
     const [text, setText] = useState('');
     const [severity, setSeverity] = useState(1);
     const handlePress = (type) => {
@@ -76,7 +76,7 @@ const AddTodo = ({ onAdd }) => {
             </TouchableOpacity>
         </View>
     );
-};
+}
 
-export default AddTodo;
+export default AddTaskScreen;
 
