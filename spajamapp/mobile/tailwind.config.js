@@ -6,9 +6,6 @@ module.exports = {
     './src/**/*.{js,jsx,ts,tsx}',                 // ← src 配下を使うなら
     // './app/**/*.{js,jsx,ts,tsx}',              // Expo Router を使うなら
   ],
-  theme: {
-    extend: {},
-  },
+  theme: { extend: {} },
   plugins: [],
 };
-

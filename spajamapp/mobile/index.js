@@ -1,4 +1,7 @@
+// index.js（テスト用）
+import React from 'react';
 import { registerRootComponent } from 'expo';
+import TaskListScreen from './TaskListScreen';
 
 const SAMPLE = [
   { id: '1', title: '友達と映画',   priority: 2, category: '遊び' },
@@ -11,4 +14,5 @@ const SAMPLE = [
 function App() {
   return <TaskListScreen tasks={SAMPLE} />;
 }
+
 registerRootComponent(App);
