@@ -9,6 +9,6 @@ const SAMPLE = [
 ];
 
 function App() {
-return <TaskListScreen tasks={SAMPLE} />;
-}å
+  return <TaskListScreen tasks={SAMPLE} />;
+}
 registerRootComponent(App);
