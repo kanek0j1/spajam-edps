@@ -11,19 +11,19 @@ const manualData = [
     id: 1,
     title: 'トップ画面操作',
     // 画像はプロジェクト内の適切なパスを指定してください
-    // image: require('../assets/manual-image-1.png'),
+    image: require('../images/info.jpg'),
     description: 'なんちゃらなんちゃらなんちゃらなんちゃらなんちゃらなんちゃらなんちゃらなんちゃらなんちゃらなんちゃらなんちゃらなんちゃらなんちゃらなんちゃら。',
   },
   {
     id: 2,
     title: '次のページの操作',
-    // image: require('../assets/manual-image-2.png'),
+    image: require('../images/info2.jpg'),
     description: 'これは2ページ目の説明です。なんちゃらなんちゃらなんちゃらなんちゃらなんちゃらなんちゃらなんちゃらなんちゃらなんちゃらなんちゃら。',
   },
   {
     id: 3,
     title: 'さらに次のページの操作',
-    // image: require('../assets/manual-image-3.png'),
+    image: require('../images/info3.jpg'),
     description: 'これは3ページ目の説明です。なんちゃらなんちゃらなんちゃらなんちゃらなんちゃらなんちゃらなんちゃらなんちゃらなんちゃらなんちゃら。',
   },
 ];
@@ -85,10 +85,7 @@ export default function ManualScreen({ navigation }) {
             {/* ページタイトル */}
             <Text className="text-xl font-semibold mb-6">{item.title}</Text>
             
-            {/* 画像プレースホルダー */}
-            {/* 画像ファイルがある場合は <Image> タグを使用してください */}
-            {/* <Image source={item.image} className="w-full h-64 rounded-lg bg-gray-200 mb-6" resizeMode="contain" /> */}
-            <View className="w-full h-64 rounded-lg bg-gray-300 mb-6" />
+            <Image source={item.image} className="w-full h-64 rounded-lg bg-gray-200 mb-6" resizeMode="contain" />
             
             {/* 説明文 */}
             <Text className="text-base text-gray-700 leading-6">
