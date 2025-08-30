@@ -49,7 +49,9 @@ function MainTabs() {
       })}
     >
 
-      <Tab.Screen name='ホーム' component={HomeScreen} />
+      <Tab.Screen name='ホーム'>
+        {() => <HomeScreen tasks={tasks} setTasks={setTasks} />}
+      </Tab.Screen>
       <Tab.Screen name='記録'>
         {() => <AddTaskScreen onAdd={handleAddTask} />}
       </Tab.Screen>
