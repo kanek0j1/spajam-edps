@@ -1,4 +1,4 @@
-// src/screens/HomeScreen.js — 天秤：梁ナシ、下端基準で左右が傾く
+// src/screens/HomeScreen.js — 天秤：梁は回転、base/armは“不動の絶対座標”（内容に依存しない）
 import { StatusBar } from 'expo-status-bar';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
@@ -24,10 +24,17 @@ const ITEM_TOTAL_HEIGHT = BOX_HEIGHT + BOX_MARGIN_V * 2;
 
 const { height: SCREEN_H } = Dimensions.get('window');
 
-// 天秤チューニング
-const MAX_SHIFT = 60;          // 片側の最大上下移動(px) — 行に余白も確保
-const STEP_PER_DIFF = 12;      // “個数差1” あたりの移動量(px)
-const MIN_COL_HEIGHT = SCREEN_H * 0.4; // 少数件でも下に貼り付く最低高さ
+// ===== 天秤チューニング =====
+const MAX_SHIFT = 60;                 // 片側の最大上下移動(px)
+const STEP_PER_DIFF = 12;             // 個数差1あたりの移動量(px)
+const MIN_COL_HEIGHT = SCREEN_H * 0.4;
+const MAX_DEG = 30;                   // 梁の最大回転角（度）
+
+// ===== “不動の”配置用ステージ定数（px固定） =====
+// scaleArea 内での固定Y座標。%指定をやめ、pxで固定する。
+const STAGE_HEIGHT = 360;             // 天秤一式の表示ステージの高さ（必要に応じて調整）
+const ARM_Y = 236;                     // 梁(arm.png) の上端Y（scaleArea基準、px）
+const BASE_Y = 278;                   // base.png の上端Y（scaleArea基準、px）
 
 export default function HomeScreen() {
   const [leftData, setLeftData] = useState([]);   // 左(仕事)
@@ -65,7 +72,7 @@ export default function HomeScreen() {
     setWorkSum(left.length);
     setPlaySum(right.length);
 
-    // 差分→目標シフト（下端基準で上下にスライド）
+    // 差分→目標シフト
     const diff = left.length - right.length; // 正: 左が重い
     const targetShift = Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, diff * STEP_PER_DIFF));
     Animated.timing(tilt, {
@@ -118,6 +125,13 @@ export default function HomeScreen() {
   const leftTranslateY = tilt;                          // + で下に沈む
   const rightTranslateY = Animated.multiply(tilt, -1);  // 逆相で上がる
 
+  // 梁の回転（方向は“逆”指定）：-MAX_SHIFT～+MAX_SHIFT → +MAX_DEG～-MAX_DEG
+  const armRotate = tilt.interpolate({
+    inputRange: [-MAX_SHIFT, MAX_SHIFT],
+    outputRange: [`${MAX_DEG}deg`, `-${MAX_DEG}deg`],
+    extrapolate: 'clamp',
+  });
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={{ flex: 1 }}>
@@ -125,12 +139,29 @@ export default function HomeScreen() {
 
         {/* 画面全体スクロール */}
         <ScrollView contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator>
-          {/* 天秤エリア：下端基準にそろえ、上下に揺れる余白を用意 */}
-          <View style={styles.scaleArea}>
+          {/* ===== 天秤エリア（不動のステージ内に arm/base を“px固定”で絶対配置） ===== */}
+          <View style={[styles.scaleArea, { height: STAGE_HEIGHT }]}>
+            {/* 梁（arm.png）：px固定の絶対座標＋回転 */}
+            <Animated.Image
+              source={require('../images/arm.png')}
+              style={[
+                styles.arm,
+                { top: ARM_Y, transform: [{ rotateZ: armRotate }] },
+              ]}
+            />
+
+            {/* base.png：px固定の絶対座標 */}
+            <Image
+              source={require('../images/base.png')}
+              style={[styles.base, { top: BASE_Y }]}
+            />
+
+            {/* 下端基準の2列（列自体が上下にスライド） */}
             <View style={styles.columnsRow}>
-              {/* Left */}
+              {/* Left column */}
               <Animated.View style={[styles.column, { transform: [{ translateY: leftTranslateY }] }]}>
                 <Text style={styles.columnTitle}>Left（仕事）</Text>
+                <Image source={require('../images/dish.png')} style={styles.dish} />
                 <View style={styles.columnBox}>
                   <View style={[styles.columnInner, { minHeight: MIN_COL_HEIGHT }]}>
                     {leftData.map(renderLeft)}
@@ -138,9 +169,10 @@ export default function HomeScreen() {
                 </View>
               </Animated.View>
 
-              {/* Right */}
+              {/* Right column */}
               <Animated.View style={[styles.column, { transform: [{ translateY: rightTranslateY }] }]}>
                 <Text style={styles.columnTitle}>Right（遊び）</Text>
+                <Image source={require('../images/dish.png')} style={styles.dish} />
                 <View style={styles.columnBox}>
                   <View style={[styles.columnInner, { minHeight: MIN_COL_HEIGHT }]}>
                     {rightData.map(renderRight)}
@@ -150,13 +182,9 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* 下のヘッダーUI（バーや画像） */}
+          {/* バー（天秤の下側。通常レイアウトで固定） */}
           <View style={styles.header}>
-            <Image
-              style={{ width: 120, height: 120 }}
-              source={require('../images/base.png')}
-            />
-            <View style={[styles.barContainer, { marginTop: 12 }]}>
+            <View style={[styles.barContainer, { marginTop: 0 }]}>
               <View style={[styles.barFillBlue, { flex: workRatio }]} />
               <View style={[styles.barFillOrange, { flex: playRatio }]} />
             </View>
@@ -179,18 +207,35 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
 
-  // 天秤エリア
+  // 天秤エリア（arm/base を絶対配置するため relative。高さは STAGE_HEIGHT で固定）
   scaleArea: {
-    // ここはコンテナ。中の row で下端基準を作る
+    position: 'relative',
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
+
+  // 梁（arm.png）
+  arm: {
+    position: 'absolute',
+    left: '20%',
+    width: 210,
+    height: 160,
+    resizeMode: 'contain',
+    zIndex: 0,           // 皿や base より背面
+    pointerEvents: 'none',
   },
 
   // 下端基準の 2 列行
   columnsRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,                 // ステージ下端を基準
     flexDirection: 'row',
     gap: 12,
-    alignItems: 'flex-end',    // ← 列の下端を揃える“基準”
-    paddingTop: MAX_SHIFT,     // 上に振れる余白
-    paddingBottom: MAX_SHIFT,  // 下に沈む余白
+    alignItems: 'flex-end',    // 列の下端を揃える
+    paddingTop: MAX_SHIFT,     // 上に振れる余白（列内で完結）
+    paddingBottom: MAX_SHIFT,  // 下に沈む余白（列内で完結）
   },
 
   column: { flex: 1 },
@@ -199,16 +244,17 @@ const styles = StyleSheet.create({
   // 枠
   columnBox: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#f4f4f4',
+    color:'#333',
     borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: '#fff',
+    backgroundColor: '#f4f4f4',
   },
 
-  // 列の中身（ここで“下寄せ”）
+  // 列の中身（常に下寄せ）
   columnInner: {
     flexGrow: 1,
-    justifyContent: 'flex-end', // 常に下から積む
+    justifyContent: 'flex-end',
   },
 
   // --- ボックス ---
@@ -232,10 +278,36 @@ const styles = StyleSheet.create({
     width: 80,
   },
 
-  // 下のヘッダー（バーなど）
+  // 皿
+  dish: {
+    position: 'absolute',
+    bottom: -90,
+    left: '8%',
+    transform: [{ translateX: -50 }],
+    width: 240,
+    height: 140,
+    resizeMode: 'contain',
+    zIndex: 1,
+    pointerEvents: 'none', 
+  },
+
+  // base.png（“不動”：px固定の絶対座標）
+  base: {
+    position: 'absolute',
+    left: '50%',
+    transform: [{ translateX: -60 }],
+    width: 120,
+    height: 120,
+    resizeMode: 'contain',
+    zIndex: 2,
+    pointerEvents: 'none',
+  },
+
+  // バー（通常レイアウト）
   header: {
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingTop: 20,
+    paddingBottom: 12,
   },
   barContainer: {
     width: 256,
