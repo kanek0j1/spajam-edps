@@ -11,4 +11,5 @@ const SAMPLE = [
 function App() {
   return <TaskListScreen tasks={SAMPLE} />;
 }
+
 registerRootComponent(App);
