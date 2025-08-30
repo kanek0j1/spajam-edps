@@ -145,7 +145,7 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
             <View style={styles.columnsRow}>
               {/* Left column */}
               <Animated.View style={[styles.column, { transform: [{ translateY: leftTranslateY }] }]}>
-                <Text style={styles.columnTitle}>Left（仕事）</Text>
+                
                 <Image source={require('../images/dish.png')} style={styles.dish} />
                 <View style={styles.columnBox}>
                   <View style={[styles.columnInner, { minHeight: MIN_COL_HEIGHT }]}>
@@ -156,7 +156,7 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
 
               {/* Right column */}
               <Animated.View style={[styles.column, { transform: [{ translateY: rightTranslateY }] }]}>
-                <Text style={styles.columnTitle}>Right（遊び）</Text>
+                
                 <Image source={require('../images/dish.png')} style={styles.dish} />
                 <View style={styles.columnBox}>
                   <View style={[styles.columnInner, { minHeight: MIN_COL_HEIGHT }]}>
