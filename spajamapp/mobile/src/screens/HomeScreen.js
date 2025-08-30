@@ -254,6 +254,7 @@ const styles = StyleSheet.create({
   // 列の中身（常に下寄せ）
   columnInner: {
     flexGrow: 1,
+
     justifyContent: 'flex-end',
   },
 
@@ -264,7 +265,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     marginVertical: BOX_MARGIN_V,
-    backgroundColor: '#eee',
+    backgroundColor:'#dddddd',
     borderRadius: 12,
   },
   label: {
