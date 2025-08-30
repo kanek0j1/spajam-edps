@@ -1,12 +1,11 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
-    "./App.{js,jsx,ts,tsx}",
-    "./src/**/*.{js,jsx,ts,tsx}",
+    './index.{js,jsx,ts,tsx}',                    // ← index を監視
+    './TaskListScreen.{js,jsx,ts,tsx}',           // ← 直下にある画面
+    './src/**/*.{js,jsx,ts,tsx}',                 // ← src 配下を使うなら
+    // './app/**/*.{js,jsx,ts,tsx}',              // Expo Router を使うなら
   ],
-  theme: {
-    extend: {},
-  },
+  theme: { extend: {} },
   plugins: [],
 };
-
