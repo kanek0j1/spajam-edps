@@ -23,7 +23,7 @@ export default function TaskListScreen({ tasks: list, setTasks: setList }) {
     cat: 64,   // カテゴリ
     act: 64,   // 操作（✎+🗑）
   };
-  
+
 
   // const [list, setList] = useState([]);
   // const [refreshing, setRefreshing] = useState(false);
@@ -68,16 +68,23 @@ export default function TaskListScreen({ tasks: list, setTasks: setList }) {
   const confirmRemoveOne = useCallback((id) => {
     Alert.alert('削除しますか？', 'このタスクを削除します。', [
       { text: 'キャンセル', style: 'cancel' },
-      { text: '削除', style: 'destructive', onPress: async () => { await removeTask(id); await load(); } },
+      {
+        text: '削除',
+        style: 'destructive',
+        onPress: async () => {
+          await removeTask(id);
+          setList(currentList => currentList.filter(task => task.id !== id));
+        }
+      },
     ]);
-  }, [load]);
+  }, [setList]);
 
   const renderItem = ({ item }) => (
     <View className="px-4 py-3 flex-row items-center">
 
       {/* タイトル（左側は可変幅） */}
       <Pressable className="flex-1 pr-3" onPress={() => navigation.navigate('編集', { id: item.id })}>
-        <Text className="text-base text-zinc-900" numberOfLines={1}>{item.text}</Text>
+        <Text className="text-base text-zinc-900" numberOfLines={1}>{item.title}</Text>
       </Pressable>
 
       {/* 重要度（中央寄せ／固定幅） */}
