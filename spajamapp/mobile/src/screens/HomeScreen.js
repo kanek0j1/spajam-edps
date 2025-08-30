@@ -1,6 +1,6 @@
-// src/screens/HomeScreen.js — 天秤：梁は回転、base/armは“不動の絶対座標”（内容に依存しない）
+// src/screens/HomeScreen.js — 天秤：梁は回転、base/armは“不動の絶対座標”（内容に依存しない、props の list/setList を利用）
 import { StatusBar } from 'expo-status-bar';
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -16,11 +16,8 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 
-import { listTasks, removeTask } from '../lib/tasksRepo';
-
 const BOX_HEIGHT = 40;
 const BOX_MARGIN_V = 0;
-const ITEM_TOTAL_HEIGHT = BOX_HEIGHT + BOX_MARGIN_V * 2;
 
 const { height: SCREEN_H } = Dimensions.get('window');
 
@@ -31,16 +28,13 @@ const MIN_COL_HEIGHT = SCREEN_H * 0.4;
 const MAX_DEG = 30;                   // 梁の最大回転角（度）
 
 // ===== “不動の”配置用ステージ定数（px固定） =====
-// scaleArea 内での固定Y座標。%指定をやめ、pxで固定する。
-const STAGE_HEIGHT = 360;             // 天秤一式の表示ステージの高さ（必要に応じて調整）
-const ARM_Y = 236;                     // 梁(arm.png) の上端Y（scaleArea基準、px）
-const BASE_Y = 278;                   // base.png の上端Y（scaleArea基準、px）
+const STAGE_HEIGHT = 360;
+const ARM_Y = 236;
+const BASE_Y = 278;
 
-export default function HomeScreen() {
+export default function HomeScreen({ tasks: list, setTasks: setList }) {
   const [leftData, setLeftData] = useState([]);   // 左(仕事)
   const [rightData, setRightData] = useState([]); // 右(遊び)
-
-  // 表示用（1個=重さ1）
   const [workSum, setWorkSum] = useState(0);
   const [playSum, setPlaySum] = useState(0);
 
@@ -55,51 +49,35 @@ export default function HomeScreen() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
   };
 
-  const load = useCallback(async () => {
-    const tasks = await listTasks();
-
-    const left = tasks
+  // props の list が変化したら再集計
+  useEffect(() => {
+    const left = list
       .filter(t => t.type === '仕事')
-      .map(t => ({ key: t.id, label: t.text }));
+      .map((t, idx) => ({ key: t.id ?? String(idx), label: t.title }));
 
-    const right = tasks
+    const right = list
       .filter(t => t.type !== '仕事')
-      .map(t => ({ key: t.id, label: t.text }));
+      .map((t, idx) => ({ key: t.id ?? String(idx), label: t.title }));
 
     setLeftData(left);
     setRightData(right);
-
     setWorkSum(left.length);
     setPlaySum(right.length);
 
-    // 差分→目標シフト
-    const diff = left.length - right.length; // 正: 左が重い
+    const diff = left.length - right.length;
     const targetShift = Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, diff * STEP_PER_DIFF));
+
     Animated.timing(tilt, {
       toValue: targetShift,
       duration: 260,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
-  }, [tilt]);
+  }, [list, tilt]);
 
-  useEffect(() => { load(); }, [load]);
-  useFocusEffect(useCallback(() => { load(); }, [load]));
-
-  const makeOnDelete = (which /* 'left' | 'right' */) => async (itemKey) => {
-    try {
-      await removeTask(itemKey);
-    } finally {
-      animateList();
-      if (which === 'left') {
-        setLeftData(prev => prev.filter(d => d.key !== itemKey));
-        setWorkSum(prev => Math.max(0, prev - 1));
-      } else {
-        setRightData(prev => prev.filter(d => d.key !== itemKey));
-        setPlaySum(prev => Math.max(0, prev - 1));
-      }
-      load(); // 正確に再集計＆再アニメ
-    }
+  const makeOnDelete = (which /* 'left' | 'right' */) => (itemKey) => {
+    animateList();
+    setList(prev => prev.filter(d => d.id !== itemKey && d.key !== itemKey));
   };
 
   const renderItem = (onDelete) => (item) => (
@@ -122,10 +100,10 @@ export default function HomeScreen() {
   const renderRight = renderItem(makeOnDelete('right'));
 
   // 左右列の縦移動：下端基準
-  const leftTranslateY = tilt;                          // + で下に沈む
-  const rightTranslateY = Animated.multiply(tilt, -1);  // 逆相で上がる
+  const leftTranslateY = tilt;
+  const rightTranslateY = Animated.multiply(tilt, -1);
 
-  // 梁の回転（方向は“逆”指定）：-MAX_SHIFT～+MAX_SHIFT → +MAX_DEG～-MAX_DEG
+  // 梁の回転：逆方向
   const armRotate = tilt.interpolate({
     inputRange: [-MAX_SHIFT, MAX_SHIFT],
     outputRange: [`${MAX_DEG}deg`, `-${MAX_DEG}deg`],
@@ -136,27 +114,15 @@ export default function HomeScreen() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={{ flex: 1 }}>
         <StatusBar style="auto" />
-
-        {/* 画面全体スクロール */}
         <ScrollView contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator>
-          {/* ===== 天秤エリア（不動のステージ内に arm/base を“px固定”で絶対配置） ===== */}
+          {/* 天秤エリア */}
           <View style={[styles.scaleArea, { height: STAGE_HEIGHT }]}>
-            {/* 梁（arm.png）：px固定の絶対座標＋回転 */}
             <Animated.Image
               source={require('../images/arm.png')}
-              style={[
-                styles.arm,
-                { top: ARM_Y, transform: [{ rotateZ: armRotate }] },
-              ]}
+              style={[styles.arm, { top: ARM_Y, transform: [{ rotateZ: armRotate }] }]}
             />
+            <Image source={require('../images/base.png')} style={[styles.base, { top: BASE_Y }]} />
 
-            {/* base.png：px固定の絶対座標 */}
-            <Image
-              source={require('../images/base.png')}
-              style={[styles.base, { top: BASE_Y }]}
-            />
-
-            {/* 下端基準の2列（列自体が上下にスライド） */}
             <View style={styles.columnsRow}>
               {/* Left column */}
               <Animated.View style={[styles.column, { transform: [{ translateY: leftTranslateY }] }]}>
@@ -182,7 +148,7 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* バー（天秤の下側。通常レイアウトで固定） */}
+          {/* バー */}
           <View style={styles.header}>
             <View style={[styles.barContainer, { marginTop: 0 }]}>
               <View style={[styles.barFillBlue, { flex: workRatio }]} />
@@ -200,86 +166,65 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  // ScrollView 全体
   screenContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 24,
   },
-
-  // 天秤エリア（arm/base を絶対配置するため relative。高さは STAGE_HEIGHT で固定）
   scaleArea: {
     position: 'relative',
     paddingTop: 0,
     paddingBottom: 0,
   },
-
-  // 梁（arm.png）
   arm: {
     position: 'absolute',
     left: '20%',
     width: 210,
     height: 160,
     resizeMode: 'contain',
-    zIndex: 0,           // 皿や base より背面
+    zIndex: 0,
     pointerEvents: 'none',
   },
-
-  // 下端基準の 2 列行
   columnsRow: {
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 0,                 // ステージ下端を基準
+    bottom: 0,
     flexDirection: 'row',
     gap: 12,
-    alignItems: 'flex-end',    // 列の下端を揃える
-    paddingTop: MAX_SHIFT,     // 上に振れる余白（列内で完結）
-    paddingBottom: MAX_SHIFT,  // 下に沈む余白（列内で完結）
+    alignItems: 'flex-end',
+    paddingTop: MAX_SHIFT,
+    paddingBottom: MAX_SHIFT,
   },
-
   column: { flex: 1 },
   columnTitle: { fontWeight: 'bold', marginBottom: 8 },
-
-  // 枠
   columnBox: {
     borderWidth: 1,
     borderColor: '#f4f4f4',
-    color:'#333',
     borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: '#f4f4f4',
   },
-
-  // 列の中身（常に下寄せ）
   columnInner: {
     flexGrow: 1,
-
     justifyContent: 'flex-end',
   },
-
-  // --- ボックス ---
   box: {
     height: BOX_HEIGHT,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 16,
     marginVertical: BOX_MARGIN_V,
-    backgroundColor:'#dddddd',
+    backgroundColor: '#dddddd',
     borderRadius: 12,
   },
-  label: {
-    fontSize: 18,
-    fontWeight: '500',
-  },
+  label: { fontSize: 18, fontWeight: '500' },
   deleteBox: {
     backgroundColor: 'red',
     justifyContent: 'center',
     alignItems: 'center',
     width: 80,
   },
-
-  // 皿
   dish: {
     position: 'absolute',
     bottom: -90,
@@ -289,10 +234,8 @@ const styles = StyleSheet.create({
     height: 140,
     resizeMode: 'contain',
     zIndex: 1,
-    pointerEvents: 'none', 
+    pointerEvents: 'none',
   },
-
-  // base.png（“不動”：px固定の絶対座標）
   base: {
     position: 'absolute',
     left: '50%',
@@ -303,8 +246,6 @@ const styles = StyleSheet.create({
     zIndex: 2,
     pointerEvents: 'none',
   },
-
-  // バー（通常レイアウト）
   header: {
     alignItems: 'center',
     paddingTop: 20,
