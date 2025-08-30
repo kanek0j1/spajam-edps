@@ -10,37 +10,60 @@ import {
   Alert,
   Pressable,
 } from 'react-native';
+
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { listTasks, clearAllTasks, removeTask } from '../lib/tasksRepo';
+import { listTasks, clearAllTasks, removeTask,saveTasks } from '../lib/tasksRepo';
 
-export default function TaskListScreen() {
+export default function TaskListScreen({ tasks: list, setTasks: setList }) {
   const navigation = useNavigation();
-  const [list, setList] = useState([]);
-  const [refreshing, setRefreshing] = useState(false);
-
   // 列の固定幅（ヘッダーとアイテムで共通にする）
   const COL = {
     sev: 55,   // 重要度
     cat: 64,   // カテゴリ
     act: 64,   // 操作（✎+🗑）
   };
+  
 
-  const load = useCallback(async () => { setList(await listTasks()); }, []);
-  useEffect(() => { load(); }, [load]);
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  // const [list, setList] = useState([]);
+  // const [refreshing, setRefreshing] = useState(false);
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true); await load(); setRefreshing(false);
-  }, [load]);
+  // const load = useCallback(async () => {
+  //   const data = await listTasks();
+  //   setList(data);
+  // }, []);
+
+  // useEffect(() => { load(); }, [load]);
+  // useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // const onRefresh = useCallback(async () => {
+  //   setRefreshing(true);
+  //   await load();
+  //   setRefreshing(false);
+  // }, [load]);
+
 
   const confirmResetAll = useCallback(() => {
-    if (list.length === 0) return;
-    Alert.alert('全削除の確認', 'すべてのタスクを削除します。元に戻せません。', [
-      { text: 'キャンセル', style: 'cancel' },
-      { text: '削除する', style: 'destructive', onPress: async () => { await clearAllTasks(); await load(); } },
-    ]);
-  }, [list.length, load]);
+
+    if (list.length === 0) return; // 空なら何もしない（任意）
+    Alert.alert(
+      '全削除の確認',
+      '本当にすべてのタスクを削除しますか？この操作は元に戻せません。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: '削除する',
+          style: 'destructive',
+          onPress: async () => {
+            await clearAllTasks();
+            setList([]);
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  }, [list.length, setList]);
+
 
   const confirmRemoveOne = useCallback((id) => {
     Alert.alert('削除しますか？', 'このタスクを削除します。', [
@@ -51,6 +74,7 @@ export default function TaskListScreen() {
 
   const renderItem = ({ item }) => (
     <View className="px-4 py-3 flex-row items-center">
+
       {/* タイトル（左側は可変幅） */}
       <Pressable className="flex-1 pr-3" onPress={() => navigation.navigate('編集', { id: item.id })}>
         <Text className="text-base text-zinc-900" numberOfLines={1}>{item.text}</Text>
@@ -58,8 +82,9 @@ export default function TaskListScreen() {
 
       {/* 重要度（中央寄せ／固定幅） */}
       <View style={{ width: COL.sev }} className="items-center">
+
         <View className="px-2 py-1 rounded-full bg-amber-100">
-          <Text className="text-xs font-semibold text-amber-700">{item.severity}</Text>
+          <Text className="text-xs font-semibold text-amber-700">{item.priority}</Text>
         </View>
       </View>
 
@@ -103,7 +128,7 @@ export default function TaskListScreen() {
       <FlatList
         data={list}
         keyExtractor={(item) => item.id}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        // refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListHeaderComponent={
           <View className="px-4 py-2 bg-zinc-50 border-y border-zinc-200">
             <View className="flex-row items-center">

@@ -9,12 +9,29 @@ import HomeScreen from '../screens/HomeScreen';
 import AddTaskScreen from '../screens/AddTaskScreen';
 import TaskListScreen from '../screens/TaskListScreen';
 import ManualScreen from '../screens/ManualScreen';
+
 import EditTaskScreen from '../screens/EditTaskScreen';
+
+
+
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
+
 function MainTabs() {
+  const [tasks, setTasks] = useState([]);
+  const handleAddTask = (newTask) => {
+    const newTasks = [
+      ...tasks,
+      { id: Date.now().toString(), ...newTask }
+    ];
+    setTasks(newTasks);
+    // await saveTasks(newTasks);
+    alert('タスクを追加しました！');
+  };
+
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -31,10 +48,16 @@ function MainTabs() {
         headerTitleAlign: 'center',
       })}
     >
-      <Tab.Screen name="ホーム" component={HomeScreen} />
-      <Tab.Screen name="記録" component={AddTaskScreen} />
-      <Tab.Screen name="タスク" component={TaskListScreen} />
-      <Tab.Screen name="マニュアル" component={ManualScreen} />
+
+      <Tab.Screen name='ホーム' component={HomeScreen} />
+      <Tab.Screen name='記録'>
+        {() => <AddTaskScreen onAdd={handleAddTask} />}
+      </Tab.Screen>
+
+      <Tab.Screen name='タスク'>
+        {() => <TaskListScreen tasks={tasks} setTasks={setTasks} />}
+      </Tab.Screen>
+      <Tab.Screen name='マニュアル' component={ManualScreen} />
     </Tab.Navigator>
   );
 }
