@@ -1,4 +1,5 @@
-// src/screens/HomeScreen.js — 天秤：梁は回転、base/armは“不動の絶対座標”（内容に依存しない、props の list/setList を利用）
+// src/screens/HomeScreen.js — 天秤：梁は回転、base/armは“不動の絶対座標”
+// props の list/setList を利用し、priority を「重さ」として使用
 import { StatusBar } from 'expo-status-bar';
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -13,7 +14,6 @@ import {
   Animated,
   Easing,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 
 const BOX_HEIGHT = 40;
@@ -23,7 +23,7 @@ const { height: SCREEN_H } = Dimensions.get('window');
 
 // ===== 天秤チューニング =====
 const MAX_SHIFT = 60;                 // 片側の最大上下移動(px)
-const STEP_PER_DIFF = 12;             // 個数差1あたりの移動量(px)
+const STEP_PER_DIFF = 12;             // 「重さ差 1」あたりの移動量(px)
 const MIN_COL_HEIGHT = SCREEN_H * 0.4;
 const MAX_DEG = 30;                   // 梁の最大回転角（度）
 
@@ -35,8 +35,8 @@ const BASE_Y = 278;
 export default function HomeScreen({ tasks: list, setTasks: setList }) {
   const [leftData, setLeftData] = useState([]);   // 左(仕事)
   const [rightData, setRightData] = useState([]); // 右(遊び)
-  const [workSum, setWorkSum] = useState(0);
-  const [playSum, setPlaySum] = useState(0);
+  const [workSum, setWorkSum] = useState(0);      // 左の総「重さ」= priority 合計
+  const [playSum, setPlaySum] = useState(0);      // 右の総「重さ」
 
   // アニメ値（-MAX_SHIFT ～ +MAX_SHIFT、正=左が重い）
   const tilt = useRef(new Animated.Value(0)).current;
@@ -49,22 +49,41 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
   };
 
-  // props の list が変化したら再集計
+  // props の list が変化したら再集計（priority を重さとして使用）
   useEffect(() => {
+    // priority の正規化：未定義や異常値は 1 に丸める
+    const norm = (v) => {
+      const n = Math.round(Number(v));
+      if (!isFinite(n) || n <= 0) return 1;
+      return n;
+    };
+
     const left = list
       .filter(t => t.type === '仕事')
-      .map((t, idx) => ({ key: t.id ?? String(idx), label: t.title }));
+      .map((t, idx) => ({
+        key: t.id ?? String(idx),
+        label: t.title ?? t.text ?? '',
+        weight: norm(t.priority),
+      }));
 
     const right = list
       .filter(t => t.type !== '仕事')
-      .map((t, idx) => ({ key: t.id ?? String(idx), label: t.title }));
+      .map((t, idx) => ({
+        key: t.id ?? String(idx),
+        label: t.title ?? t.text ?? '',
+        weight: norm(t.priority),
+      }));
 
     setLeftData(left);
     setRightData(right);
-    setWorkSum(left.length);
-    setPlaySum(right.length);
 
-    const diff = left.length - right.length;
+    const wSum = left.reduce((s, x) => s + x.weight, 0);
+    const pSum = right.reduce((s, x) => s + x.weight, 0);
+    setWorkSum(wSum);
+    setPlaySum(pSum);
+
+    // 「重さの差」に応じてシフト
+    const diff = wSum - pSum; // 正: 左が重い
     const targetShift = Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, diff * STEP_PER_DIFF));
 
     Animated.timing(tilt, {
@@ -75,7 +94,7 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
     }).start();
   }, [list, tilt]);
 
-  const makeOnDelete = (which /* 'left' | 'right' */) => (itemKey) => {
+  const makeOnDelete = () => (itemKey) => {
     animateList();
     setList(prev => prev.filter(d => d.id !== itemKey && d.key !== itemKey));
   };
@@ -96,14 +115,14 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
     </Swipeable>
   );
 
-  const renderLeft = renderItem(makeOnDelete('left'));
-  const renderRight = renderItem(makeOnDelete('right'));
+  const renderLeft = renderItem(makeOnDelete());
+  const renderRight = renderItem(makeOnDelete());
 
   // 左右列の縦移動：下端基準
   const leftTranslateY = tilt;
   const rightTranslateY = Animated.multiply(tilt, -1);
 
-  // 梁の回転：逆方向
+  // 梁の回転：逆方向（左が重いと時計回り）
   const armRotate = tilt.interpolate({
     inputRange: [-MAX_SHIFT, MAX_SHIFT],
     outputRange: [`${MAX_DEG}deg`, `-${MAX_DEG}deg`],
