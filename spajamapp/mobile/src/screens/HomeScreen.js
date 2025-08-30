@@ -1,4 +1,4 @@
-// src/screens/HomeScreen.js — 天秤：priorityを重さに、タップでモーダル。スワイプ時はモーダル抑制、ラベルは上固定で拡大
+// src/screens/HomeScreen.js — 天秤：priorityを重さに、タップでモーダル。スワイプ時はモーダル抑制、ラベルは上固定で拡大＋コメント表示
 import { StatusBar } from 'expo-status-bar';
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -22,10 +22,10 @@ const BOX_MARGIN_V = 0;
 const { height: SCREEN_H } = Dimensions.get('window');
 
 // ===== 天秤チューニング =====
-const MAX_SHIFT = 60; // 片側の最大上下移動(px)
-const STEP_PER_DIFF = 12; // 「重さ差 1」あたりの移動量(px)
+const MAX_SHIFT = 60;                 // 片側の最大上下移動(px)
+const STEP_PER_DIFF = 12;             // 「重さ差 1」あたりの移動量(px)
 const MIN_COL_HEIGHT = SCREEN_H * 0.4;
-const MAX_DEG = 30; // 梁の最大回転角（度）
+const MAX_DEG = 30;                   // 梁の最大回転角（度）
 
 // ===== “不動の”配置用ステージ定数（px固定） =====
 const STAGE_HEIGHT = 360;
@@ -41,7 +41,7 @@ const LABEL_MAX_SIZE = 64;
 const LABEL_SLOT_HEIGHT = LABEL_MAX_SIZE;
 
 export default function HomeScreen({ tasks: list, setTasks: setList }) {
-  const [leftData, setLeftData] = useState([]); // 左(仕事)
+  const [leftData, setLeftData] = useState([]);   // 左(仕事)
   const [rightData, setRightData] = useState([]); // 右(休息)
   const [workSum, setWorkSum] = useState(0);
   const [playSum, setPlaySum] = useState(0);
@@ -61,6 +61,7 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
   };
 
+  // props の list が変化したら再集計（priority を重さとして使用）
   useEffect(() => {
     const norm = (v) => {
       const n = Math.round(Number(v));
@@ -92,7 +93,7 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
     setWorkSum(wSum);
     setPlaySum(pSum);
 
-    const diff = wSum - pSum;
+    const diff = wSum - pSum; // 正: 左が重い
     const targetShift = Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, diff * STEP_PER_DIFF));
 
     Animated.timing(tilt, {
@@ -146,6 +147,39 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
     extrapolate: 'clamp',
   });
 
+  // ===== コメント判定（件数は“個数”、割合は weight 比率） =====
+  const workCount = leftData.length;
+  const restCount = rightData.length;
+
+  const pctW = Math.round(workRatio * 100);
+  const pctR = Math.round(playRatio * 100);
+
+  let commentText = '完璧なバランス、完璧な暮らし！';
+  let commentColor = '#22c55e'; // 緑
+
+  if (workCount === 0 && restCount === 0) {
+    commentText = 'これこそが真の「バランス」です...！';
+    commentColor = '#a855f7'; // 紫
+  } else if (workCount === 1 && pctW === 100) {
+    commentText = 'あと少しで、あなたは自由です！';
+    commentColor = '#3b82f6'; // 青
+  } else if (restCount === 1 && pctR === 100) {
+    commentText = '楽しい時間は、あっという間です...';
+    commentColor = '#abbcff'; // オレンジ
+  } else if (pctW >= 51 && pctW <= 74) {
+    commentText = '健康的な業務習慣です！';
+    commentColor = '#3b82f6';
+  } else if (pctW >= 75) {
+    commentText = 'たまには休息も挟んでくださいね...？';
+    commentColor = '#ef4444'; // 赤
+  } else if (pctR >= 51 && pctR <= 74) {
+    commentText = 'これくらいが丁度いいんです！';
+    commentColor = '#fb923c';
+  } else if (pctR >= 75) {
+    commentText = 'ちょっと遊び過ぎかも？';
+    commentColor = '#f97316'; // ビビッドオレンジ
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={{ flex: 1 }}>
@@ -160,6 +194,7 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
             <Image source={require('../images/base.png')} style={[styles.base, { top: BASE_Y }]} />
 
             <View style={styles.columnsRow}>
+              {/* Left column */}
               <Animated.View style={[styles.column, { transform: [{ translateY: leftTranslateY }] }]}>
                 <Image source={require('../images/dish.png')} style={styles.dish} />
                 <View style={styles.columnBox}>
@@ -169,9 +204,8 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
                 </View>
               </Animated.View>
 
-              <Animated.View
-                style={[styles.column, { transform: [{ translateY: rightTranslateY }] }]}
-              >
+              {/* Right column */}
+              <Animated.View style={[styles.column, { transform: [{ translateY: rightTranslateY }] }]}>
                 <Image source={require('../images/dish.png')} style={styles.dish} />
                 <View style={styles.columnBox}>
                   <View style={[styles.columnInner, { minHeight: MIN_COL_HEIGHT }]}>
@@ -203,14 +237,14 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
                   </Text>
                 </View>
                 <Text style={[styles.rolePercent, { color: '#3b82f6', marginLeft: 6 }]}>
-                  {Math.round(workRatio * 100)}%
+                  {pctW}%
                 </Text>
               </View>
 
               {/* 右側（休息） */}
               <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
                 <Text style={[styles.rolePercent, { color: '#fb923c', marginRight: 6 }]}>
-                  {Math.round(playRatio * 100)}%
+                  {pctR}%
                 </Text>
                 <View style={styles.roleSlot}>
                   <Text
@@ -223,6 +257,11 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
                   </Text>
                 </View>
               </View>
+            </View>
+
+            {/* ここが追加：コメント表示 */}
+            <View style={styles.commentWrap}>
+              <Text style={[styles.commentText, { color: commentColor }]}>{commentText}</Text>
             </View>
           </View>
         </ScrollView>
@@ -329,7 +368,7 @@ const styles = StyleSheet.create({
   barFillBlue: { height: '100%', backgroundColor: '#3b82f6' },
   barFillOrange: { height: '100%', backgroundColor: '#fb923c' },
 
-  // ラベル部分
+  // バー下のラベル
   roleLabels: {
     width: 256,
     marginTop: 12,
@@ -346,6 +385,18 @@ const styles = StyleSheet.create({
   },
   rolePercent: {
     fontSize: 14,
+  },
+
+  // コメント表示
+  commentWrap: {
+    marginTop: 60,
+    width: 256,
+    alignItems: 'center',
+  },
+  commentText: {
+    fontSize: 44,         // 大きめ
+    fontWeight: '900',    // 太め
+    textAlign: 'center',
   },
 
   // ==== Overlay ====
