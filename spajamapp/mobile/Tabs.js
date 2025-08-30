@@ -69,7 +69,7 @@ function MyTabs() {
   );
 }
 
-export default function App() {
+export default function Tabs() {
   return (
     <NavigationContainer>
       <MyTabs />
