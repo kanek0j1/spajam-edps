@@ -14,6 +14,14 @@ ENV EXPO_NO_TELEMETRY=1 \
     CHOKIDAR_USEPOLLING=true \
     WATCHPACK_POLLING=true
 
+COPY package.json package-lock.json* ./
+
+RUN npm install
+RUN npx expo install react-dom react-native-web @expo/metro-runtime
+RUN npx expo install @google/generative-ai
+
+COPY . .
+
 EXPOSE 19000 19001 19002 19006 8081
 
 CMD ["dumb-init","bash","-lc","[ -f package.json ] && npm install || true; npm run start --workspaces=false || true"]
