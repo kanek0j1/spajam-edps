@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, TextInput, TouchableOpacity, Text, Keyboard } from 'react-native';
+import { View, TextInput, TouchableOpacity, Text, Keyboard} from 'react-native';
 
 // geminiAPIライブラリとActivityIndicatorをインポート
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -38,38 +38,47 @@ function AddTaskScreen({ onAdd }) {
             // Geminiに投げるプロンプト
             const prompt = `
             あなたはユーザーの生活を最適化するタスク管理アシスタントです。
-            与えられたタスクの優先度を 1〜10 の整数で評価してください（10 が最優先）。
+            与えられたタスクを 1〜10 の整数で厳密に評価してください（10 が最優先）。
 
-            【評価で必ず考慮する観点】
-            1) 緊急度（直近の締切・開始時刻・遅刻/キャンセルのリスク）
-            2) 影響度（遅延の損失：成績/仕事/金銭/信用/健康/法的義務）
-            3) 約束・予約の有無（第三者との取り決め、チケット/予約/支払い済み）
-            4) 取り返しのつかなさ（機会損失の大きさ・頻度が少ない機会か）
-            5) 所要時間と依存関係（前工程/準備が必要か、短時間で終わるか）
-            6) 関係資本（人間関係の重要性・希少性・頻度）
-              - 「娯楽」タスクもここを重視：
-                ・久しぶり/年に一度/遠方から来る 等の再会機会は高評価
-                ・家族/親友/重要な同僚との約束は高評価
-                ・一人でいつでも代替できる娯楽は低め
-            7) 健康・安全（体調・通院・薬・睡眠 等は高評価）
+            【必ず踏む手順】
+            STEP1. 各観点を0〜100で内部評価（出力しない）
+              U 緊急度：締切/開始が近い、遅刻・キャンセルのリスク
+              I 影響度：成績/仕事/金銭/信用/健康/法的義務への影響
+              C 拘束力：第三者との約束/予約/チケット/支払い済み
+              R 関係資本：人間関係の重要性・希少性（※「遊び」でも重視）
+                  例: 「年に一度」「久しぶり」「遠方から来る」「家族/親友」「来日中/帰省中」→高評価
+                  逆に、いつでも代替可能な一人娯楽は低評価
+              H 健康・安全：通院・薬・睡眠・メンタル等
+              D 代替困難度：リスケしづらさ・前工程の依存
+              ※ヒント語彙（高評価に寄与）：「締切/提出/予約/遅刻/面接/試験/病院/支払い済み/◯日以内/年に一度/久しぶり/来日中/遠方/誕生日/記念日」
 
-            【スコアの目安】
-            - 10: 重大な締切/予約が目前、欠席や遅延で深刻な損失。あるいは極めて希少な重要人との機会（結婚式/葬儀/帰省中の旧友との一回限りの再会など）
-            - 8〜9: 48〜72時間以内の重要な締切/会議/提出、または希少で重要な人間関係の約束（年1回レベルの再会、家族イベント、予約済み）
-            - 6〜7: 中期的に重要（成績・業務に影響/定期ミーティングの準備/健康面の維持）や、比較的希少な対人予定
-            - 4〜5: 先送りしても大損はないが、やっておくと良い用事/普段の娯楽や家事
-            - 1〜3: いつでも代替可能な娯楽・思いつき・明確な期限なし
+            STEP2. 重み付き合成（内部で計算、出力しない）
+              raw = 0.24*U + 0.24*I + 0.18*C + 0.16*R + 0.14*H + 0.04*D
+              追加ルール（シャープ化：中庸回避）
+              - U>=85 または H>=85 または (R>=85 かつ 種別が「遊び」) のとき raw を少なくとも 80 に引き上げる
+              - U,I,C,H のいずれも <=30 かつ 予約/第三者が無い場合は raw を最大でも 30 に抑える
+              - 「今日/明日/今週末/◯日以内」等の明示があれば U を底上げ（+10〜20、上限100）
 
-            【ヒント（スコアを押し上げる語彙例）】
-            「締切/提出/予約/遅刻/支払い済み/チケット/病院/面接/試験/重要/◯日以内/年に一度/久しぶり/来日中/帰省中/遠方/誕生日/記念日」
+            STEP3. 1〜10へマッピング（四捨五入ではなく**等幅ビン**）
+              1: 0-9, 2:10-19, 3:20-29, 4:30-39, 5:40-49,
+              6:50-59, 7:60-69, 8:70-79, 9:80-89, 10:90-100
+              ※「とりあえず真ん中」は禁止。7や4にしがみつかないこと。
+              ※7または4を返すのは、そのビンの根拠が明確な場合のみ（基準に該当する証拠が複数あるとき）。
 
-            【入力】
-            - 種別: 「${type}」  // '仕事' または '遊び'
+            【スコアの意味（目安）】
+              10: 重大締切/予約が目前、欠席で深刻損失／極めて希少な重要人との機会（例：面接、試験日、病院の予約、葬儀、年1回の再会 等）
+              8-9: 72時間以内の重要提出・会議、予約あり、または希少で重要な対人イベント
+              6-7: 中期的に重要（準備が必要/依存あり）や比較的希少な対人予定
+              4-5: 先送り可能だが実施価値ありの用事（通常の家事・学習・普段の娯楽）
+              1-3: いつでも代替可能な娯楽・思いつき・明確な期限なし
+
+            【種別とタスク】
+            - 種別: 「${type}」  // '仕事' もしくは '遊び'
             - タスク: 「${text}」
 
-            【出力フォーマット（厳守）】
+            【出力（厳守）】
             {"priority": 1〜10の整数}
-            ※ 追加説明やコードブロック、Markdownは一切出力しない。
+            ※JSONのみ。説明やコードブロック、Markdownを出力しない。
             `.trim();
 
             const result = await model.generateContent(prompt);
@@ -99,16 +108,16 @@ function AddTaskScreen({ onAdd }) {
     };
 
   return (
-    <View className="flex-1 h-full relative">
-      <View className="w-full px-4 ml-5 mr-5">
-        <Text className="font-bold text-2xl text-center mb-[40%]">タスク追加</Text>
+    <View className="flex-1 h-full relative bg-white">
+      <View className="px-4 mx-5 ">
+        <Text className="font-bold text-2xl text-center mb-[25%] pt-16">タスク追加</Text>
 
-        {text.trim() !== '' && (
+        {/* {text.trim() !== '' && (
           <View className="mb-4">
             <Text className="text-gray-500 text-sm">追加タスク</Text>
             <Text className="text-gray-800 text-2xl font-bold">{text}</Text>
           </View>
-        )}
+        )} */}
 
         {/* 入力フォーム */}
         <View className="w-full bg-gray-100 border border-gray-200 rounded-xl p-4 mb-4">
@@ -144,10 +153,10 @@ function AddTaskScreen({ onAdd }) {
       {/* フルスクリーン・ローディング */}
       {isLoadingGemini && (
         <View
-          className="absolute inset-0 items-center justify-center bg-black/30 z-10"
+          className="absolute left-0 right-0 top-0 bottom-0 items-center justify-center bg-black/40 z-10"
           pointerEvents="auto"
         >
-          <ActivityIndicator size="large" />
+          <ActivityIndicator size="large" color="#3d85c6" />
           <Text className="mt-2.5 text-white text-base">重要度を評価中...</Text>
         </View>
       )}
