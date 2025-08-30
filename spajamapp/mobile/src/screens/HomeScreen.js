@@ -1,5 +1,4 @@
-// src/screens/HomeScreen.js — 天秤：梁は回転、base/armは“不動の絶対座標”
-// props の list/setList を利用し、priority を「重さ」として使用
+// src/screens/HomeScreen.js — 天秤：priorityを重さに、タップでモーダル。スワイプ時はモーダル抑制、ラベルは上固定で拡大
 import { StatusBar } from 'expo-status-bar';
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -13,6 +12,7 @@ import {
   Dimensions,
   Animated,
   Easing,
+  Modal,
 } from 'react-native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 
@@ -22,36 +22,46 @@ const BOX_MARGIN_V = 0;
 const { height: SCREEN_H } = Dimensions.get('window');
 
 // ===== 天秤チューニング =====
-const MAX_SHIFT = 60;                 // 片側の最大上下移動(px)
-const STEP_PER_DIFF = 12;             // 「重さ差 1」あたりの移動量(px)
+const MAX_SHIFT = 60; // 片側の最大上下移動(px)
+const STEP_PER_DIFF = 12; // 「重さ差 1」あたりの移動量(px)
 const MIN_COL_HEIGHT = SCREEN_H * 0.4;
-const MAX_DEG = 30;                   // 梁の最大回転角（度）
+const MAX_DEG = 30; // 梁の最大回転角（度）
 
 // ===== “不動の”配置用ステージ定数（px固定） =====
 const STAGE_HEIGHT = 360;
 const ARM_Y = 236;
 const BASE_Y = 278;
 
-export default function HomeScreen({ tasks: list, setTasks: setList }) {
-  const [leftData, setLeftData] = useState([]);   // 左(仕事)
-  const [rightData, setRightData] = useState([]); // 右(遊び)
-  const [workSum, setWorkSum] = useState(0);      // 左の総「重さ」= priority 合計
-  const [playSum, setPlaySum] = useState(0);      // 右の総「重さ」
+// スワイプ→削除の直後は何msタップを無効化するか
+const SUPPRESS_TAP_MS = 400;
 
-  // アニメ値（-MAX_SHIFT ～ +MAX_SHIFT、正=左が重い）
+// ラベルのフォントサイズ範囲
+const LABEL_MIN_SIZE = 14;
+const LABEL_MAX_SIZE = 64;
+const LABEL_SLOT_HEIGHT = LABEL_MAX_SIZE;
+
+export default function HomeScreen({ tasks: list, setTasks: setList }) {
+  const [leftData, setLeftData] = useState([]); // 左(仕事)
+  const [rightData, setRightData] = useState([]); // 右(休息)
+  const [workSum, setWorkSum] = useState(0);
+  const [playSum, setPlaySum] = useState(0);
+  const [preview, setPreview] = useState(null);
+
   const tilt = useRef(new Animated.Value(0)).current;
+  const suppressTapUntilRef = useRef(0);
 
   const total = Math.max(1, workSum + playSum);
   const workRatio = workSum / total;
   const playRatio = playSum / total;
 
+  const workFontSize = LABEL_MIN_SIZE + (LABEL_MAX_SIZE - LABEL_MIN_SIZE) * workRatio;
+  const playFontSize = LABEL_MIN_SIZE + (LABEL_MAX_SIZE - LABEL_MIN_SIZE) * playRatio;
+
   const animateList = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
   };
 
-  // props の list が変化したら再集計（priority を重さとして使用）
   useEffect(() => {
-    // priority の正規化：未定義や異常値は 1 に丸める
     const norm = (v) => {
       const n = Math.round(Number(v));
       if (!isFinite(n) || n <= 0) return 1;
@@ -59,7 +69,7 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
     };
 
     const left = list
-      .filter(t => t.type === '仕事')
+      .filter((t) => t.type === '仕事')
       .map((t, idx) => ({
         key: t.id ?? String(idx),
         label: t.title ?? t.text ?? '',
@@ -67,7 +77,7 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
       }));
 
     const right = list
-      .filter(t => t.type !== '仕事')
+      .filter((t) => t.type !== '仕事')
       .map((t, idx) => ({
         key: t.id ?? String(idx),
         label: t.title ?? t.text ?? '',
@@ -82,8 +92,7 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
     setWorkSum(wSum);
     setPlaySum(pSum);
 
-    // 「重さの差」に応じてシフト
-    const diff = wSum - pSum; // 正: 左が重い
+    const diff = wSum - pSum;
     const targetShift = Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, diff * STEP_PER_DIFF));
 
     Animated.timing(tilt, {
@@ -96,8 +105,16 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
 
   const makeOnDelete = () => (itemKey) => {
     animateList();
-    setList(prev => prev.filter(d => d.id !== itemKey && d.key !== itemKey));
+    suppressTapUntilRef.current = Date.now() + SUPPRESS_TAP_MS;
+    setList((prev) => prev.filter((d) => d.id !== itemKey && d.key !== itemKey));
+    setPreview((prev) => (prev?.key === itemKey ? null : prev));
   };
+
+  const openPreview = (item) => {
+    if (Date.now() < suppressTapUntilRef.current) return;
+    setPreview(item);
+  };
+  const closePreview = () => setPreview(null);
 
   const renderItem = (onDelete) => (item) => (
     <Swipeable
@@ -109,8 +126,10 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
       )}
       onSwipeableOpen={() => onDelete(item.key)}
     >
-      <Pressable style={styles.box}>
-        <Text style={styles.label}>{item.label}</Text>
+      <Pressable style={styles.box} onPress={() => openPreview(item)}>
+        <Text style={styles.label} numberOfLines={1} ellipsizeMode="tail">
+          {item.label}
+        </Text>
       </Pressable>
     </Swipeable>
   );
@@ -118,11 +137,9 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
   const renderLeft = renderItem(makeOnDelete());
   const renderRight = renderItem(makeOnDelete());
 
-  // 左右列の縦移動：下端基準
   const leftTranslateY = tilt;
   const rightTranslateY = Animated.multiply(tilt, -1);
 
-  // 梁の回転：逆方向（左が重いと時計回り）
   const armRotate = tilt.interpolate({
     inputRange: [-MAX_SHIFT, MAX_SHIFT],
     outputRange: [`${MAX_DEG}deg`, `-${MAX_DEG}deg`],
@@ -143,9 +160,7 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
             <Image source={require('../images/base.png')} style={[styles.base, { top: BASE_Y }]} />
 
             <View style={styles.columnsRow}>
-              {/* Left column */}
               <Animated.View style={[styles.column, { transform: [{ translateY: leftTranslateY }] }]}>
-                
                 <Image source={require('../images/dish.png')} style={styles.dish} />
                 <View style={styles.columnBox}>
                   <View style={[styles.columnInner, { minHeight: MIN_COL_HEIGHT }]}>
@@ -154,9 +169,9 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
                 </View>
               </Animated.View>
 
-              {/* Right column */}
-              <Animated.View style={[styles.column, { transform: [{ translateY: rightTranslateY }] }]}>
-                
+              <Animated.View
+                style={[styles.column, { transform: [{ translateY: rightTranslateY }] }]}
+              >
                 <Image source={require('../images/dish.png')} style={styles.dish} />
                 <View style={styles.columnBox}>
                   <View style={[styles.columnInner, { minHeight: MIN_COL_HEIGHT }]}>
@@ -167,34 +182,73 @@ export default function HomeScreen({ tasks: list, setTasks: setList }) {
             </View>
           </View>
 
-          {/* バー */}
+          {/* バー＋ラベル */}
           <View style={styles.header}>
-            <View style={[styles.barContainer, { marginTop: 0 }]}>
+            <View style={styles.barContainer}>
               <View style={[styles.barFillBlue, { flex: workRatio }]} />
               <View style={[styles.barFillOrange, { flex: playRatio }]} />
             </View>
-            <View style={styles.barLabels}>
-              <Text style={styles.barLabelText}>左の重さ: {workSum}</Text>
-              <Text style={styles.barLabelText}>右の重さ: {playSum}</Text>
+
+            <View style={styles.roleLabels}>
+              {/* 左側（仕事） */}
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
+                <View style={styles.roleSlot}>
+                  <Text
+                    style={[
+                      styles.roleText,
+                      { color: '#3b82f6', fontSize: workFontSize, lineHeight: workFontSize },
+                    ]}
+                  >
+                    仕事
+                  </Text>
+                </View>
+                <Text style={[styles.rolePercent, { color: '#3b82f6', marginLeft: 6 }]}>
+                  {Math.round(workRatio * 100)}%
+                </Text>
+              </View>
+
+              {/* 右側（休息） */}
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
+                <Text style={[styles.rolePercent, { color: '#fb923c', marginRight: 6 }]}>
+                  {Math.round(playRatio * 100)}%
+                </Text>
+                <View style={styles.roleSlot}>
+                  <Text
+                    style={[
+                      styles.roleText,
+                      { color: '#fb923c', fontSize: playFontSize, lineHeight: playFontSize },
+                    ]}
+                  >
+                    休息
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
         </ScrollView>
+
+        {/* プレビュー用モーダル */}
+        <Modal visible={!!preview} transparent animationType="fade" onRequestClose={closePreview}>
+          <View style={styles.overlayRoot}>
+            <Pressable style={styles.overlayBackdrop} onPress={closePreview} />
+            <View style={styles.overlayCard}>
+              <ScrollView bounces={false}>
+                <Text style={styles.overlayLabel}>{preview?.label}</Text>
+              </ScrollView>
+              <Pressable style={styles.overlayClose} onPress={closePreview}>
+                <Text style={styles.overlayCloseText}>閉じる</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
       </View>
     </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
-  screenContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 24,
-  },
-  scaleArea: {
-    position: 'relative',
-    paddingTop: 0,
-    paddingBottom: 0,
-  },
+  screenContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24 },
+  scaleArea: { position: 'relative' },
   arm: {
     position: 'absolute',
     left: '20%',
@@ -216,7 +270,6 @@ const styles = StyleSheet.create({
     paddingBottom: MAX_SHIFT,
   },
   column: { flex: 1 },
-  columnTitle: { fontWeight: 'bold', marginBottom: 8 },
   columnBox: {
     borderWidth: 1,
     borderColor: '#f4f4f4',
@@ -224,10 +277,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#f4f4f4',
   },
-  columnInner: {
-    flexGrow: 1,
-    justifyContent: 'flex-end',
-  },
+  columnInner: { flexGrow: 1, justifyContent: 'flex-end' },
   box: {
     height: BOX_HEIGHT,
     justifyContent: 'center',
@@ -265,11 +315,7 @@ const styles = StyleSheet.create({
     zIndex: 2,
     pointerEvents: 'none',
   },
-  header: {
-    alignItems: 'center',
-    paddingTop: 20,
-    paddingBottom: 12,
-  },
+  header: { alignItems: 'center', paddingTop: 20, paddingBottom: 12 },
   barContainer: {
     width: 256,
     height: 32,
@@ -282,11 +328,49 @@ const styles = StyleSheet.create({
   },
   barFillBlue: { height: '100%', backgroundColor: '#3b82f6' },
   barFillOrange: { height: '100%', backgroundColor: '#fb923c' },
-  barLabels: {
+
+  // ラベル部分
+  roleLabels: {
     width: 256,
-    marginTop: 8,
+    marginTop: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-end',
   },
-  barLabelText: { fontSize: 14 },
+  roleSlot: {
+    height: LABEL_SLOT_HEIGHT,
+    justifyContent: 'flex-start', // 上基準
+  },
+  roleText: {
+    fontWeight: '800',
+  },
+  rolePercent: {
+    fontSize: 14,
+  },
+
+  // ==== Overlay ====
+  overlayRoot: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  overlayBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
+  overlayCard: {
+    maxHeight: '70%',
+    width: '86%',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  overlayLabel: { fontSize: 18, lineHeight: 26 },
+  overlayClose: {
+    alignSelf: 'center',
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#111827',
+  },
+  overlayCloseText: { color: 'white', fontWeight: '600' },
 });
