@@ -5,12 +5,10 @@ import { v4 as uuidv4 } from 'uuid';
 
 const KEY = 'tasks';
 
-/** すべて取得（なければ []） */
 export async function listTasks() {
   return await getJSON(KEY, []);
 }
 
-/** 1件追加（先頭に追加） */
 export async function addTask({ text, type, severity }) {
   const t = (text ?? '').trim();
   if (!t) throw new Error('text is empty');
@@ -20,7 +18,6 @@ export async function addTask({ text, type, severity }) {
     text: t,
     type,                 // '仕事' or '遊び'
     severity,             // 1..4
-    done: false,
     createdAt: now,
     updatedAt: now,
   };
@@ -30,34 +27,30 @@ export async function addTask({ text, type, severity }) {
   return item;
 }
 
-/** 一部更新（存在しない id は無視） */
 export async function updateTask(id, patch) {
+  // 受け付ける項目だけを反映（done は廃止）
+  const { text, type, severity } = patch ?? {};
   const now = new Date().toISOString();
   const list = await listTasks();
   const next = list.map((it) =>
-    it.id === id ? { ...it, ...patch, updatedAt: now } : it
+    it.id === id
+      ? {
+          ...it,
+          ...(text !== undefined ? { text: (text ?? '').trim() } : {}),
+          ...(type !== undefined ? { type } : {}),
+          ...(severity !== undefined ? { severity } : {}),
+          updatedAt: now,
+        }
+      : it
   );
   await setJSON(KEY, next);
 }
 
-/** 完了トグル */
-export async function toggleTask(id) {
-  const now = new Date().toISOString();
-  const list = await listTasks();
-  const next = list.map((it) =>
-    it.id === id ? { ...it, done: !it.done, updatedAt: now } : it
-  );
-  await setJSON(KEY, next);
-}
-
-/** 1件削除 */
 export async function removeTask(id) {
   const list = await listTasks();
-  const next = list.filter((it) => it.id !== id);
-  await setJSON(KEY, next);
+  await setJSON(KEY, list.filter((it) => it.id !== id));
 }
 
-/** 全削除（空配列で上書き） */
 export async function clearAllTasks() {
   await setJSON(KEY, []);
 }
