@@ -1,51 +1,24 @@
-// src/screens/TaskListScreen.js
-import React, { useCallback, useEffect, useState } from 'react';
+import React from 'react';
 import {
   SafeAreaView,
   View,
   Text,
   FlatList,
-  RefreshControl,
   TouchableOpacity,
   Alert,
   Pressable,
 } from 'react-native';
-
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { listTasks, clearAllTasks, removeTask,saveTasks } from '../lib/tasksRepo';
+import { clearAllTasks, removeTask } from '../lib/tasksRepo';
 
 export default function TaskListScreen({ tasks: list, setTasks: setList }) {
   const navigation = useNavigation();
-  // 列の固定幅（ヘッダーとアイテムで共通にする）
-  const COL = {
-    sev: 55,   // 重要度
-    cat: 64,   // カテゴリ
-    act: 64,   // 操作（✎+🗑）
-  };
 
+  const COL = { sev: 55, cat: 64, act: 64 };
 
-  // const [list, setList] = useState([]);
-  // const [refreshing, setRefreshing] = useState(false);
-
-  // const load = useCallback(async () => {
-  //   const data = await listTasks();
-  //   setList(data);
-  // }, []);
-
-  // useEffect(() => { load(); }, [load]);
-  // useFocusEffect(useCallback(() => { load(); }, [load]));
-
-  // const onRefresh = useCallback(async () => {
-  //   setRefreshing(true);
-  //   await load();
-  //   setRefreshing(false);
-  // }, [load]);
-
-
-  const confirmResetAll = useCallback(() => {
-
-    if (list.length === 0) return; // 空なら何もしない（任意）
+  const confirmResetAll = React.useCallback(() => {
+    if (!list || list.length === 0) return;
     Alert.alert(
       '全削除の確認',
       '本当にすべてのタスクを削除しますか？この操作は元に戻せません。',
@@ -62,10 +35,9 @@ export default function TaskListScreen({ tasks: list, setTasks: setList }) {
       ],
       { cancelable: true }
     );
-  }, [list.length, setList]);
+  }, [list, setList]);
 
-
-  const confirmRemoveOne = useCallback((id) => {
+  const confirmRemoveOne = React.useCallback((id) => {
     Alert.alert('削除しますか？', 'このタスクを削除します。', [
       { text: 'キャンセル', style: 'cancel' },
       {
@@ -73,50 +45,78 @@ export default function TaskListScreen({ tasks: list, setTasks: setList }) {
         style: 'destructive',
         onPress: async () => {
           await removeTask(id);
-          setList(currentList => currentList.filter(task => task.id !== id));
-        }
+          setList(cur => cur.filter(t => t.id !== id));
+        },
       },
     ]);
   }, [setList]);
 
+  const handleEditTask = React.useCallback((item) => {
+    navigation.getParent()?.navigate('編集', { 
+      id: item.id, 
+      task: item,
+      onTaskUpdated: (updatedTask) => {
+        setList(cur => cur.map(t => (t.id === updatedTask.id ? { ...t, ...updatedTask } : t)));
+      }
+    });
+  }, [navigation, setList]);
+
   const renderItem = ({ item }) => (
     <View className="px-4 py-3 flex-row items-center">
+      {/* タイトルは押せない（編集はペンのみ） */}
+      <Text className="flex-1 pr-3 text-base text-zinc-900" numberOfLines={1}>
+        {item.title}
+      </Text>
 
-      {/* タイトル（左側は可変幅） */}
-      <Pressable className="flex-1 pr-3" onPress={() => navigation.navigate('編集', { id: item.id })}>
-        <Text className="text-base text-zinc-900" numberOfLines={1}>{item.title}</Text>
-      </Pressable>
-
-      {/* 重要度（中央寄せ／固定幅） */}
+      {/* 重要度（固定幅） */}
       <View style={{ width: COL.sev }} className="items-center">
-
         <View className="px-2 py-1 rounded-full bg-amber-100">
-          <Text className="text-xs font-semibold text-amber-700">{item.priority}</Text>
+          <Text className="text-xs font-semibold text-amber-700">
+            {item.priority}
+          </Text>
         </View>
       </View>
 
-      {/* カテゴリ（中央寄せ／固定幅） */}
+      {/* カテゴリ（固定幅） */}
       <View style={{ width: COL.cat }} className="items-center">
-        <View className={'px-2 py-1 rounded-full ' + (item.type === '仕事' ? 'bg-blue-100' : 'bg-emerald-100')}>
-          <Text className={'text-xs font-medium ' + (item.type === '仕事' ? 'text-blue-700' : 'text-emerald-700')}>
+        <View
+          className={
+            'px-2 py-1 rounded-full ' +
+            (item.type === '仕事' ? 'bg-blue-100' : 'bg-emerald-100')
+          }
+        >
+          <Text
+            className={
+              'text-xs font-medium ' +
+              (item.type === '仕事' ? 'text-blue-700' : 'text-emerald-700')
+            }
+          >
             {item.type}
           </Text>
         </View>
       </View>
 
-      {/* 操作（右寄せ／固定幅内にアイコンを整列） */}
+      {/* 操作（右端／ペンのみ編集） */}
       <View style={{ width: COL.act }} className="flex-row justify-end items-center gap-2">
-        <Pressable onPress={() => navigation.navigate('編集', { id: item.id })} className="p-1" accessibilityLabel="編集">
+        <Pressable
+          onPress={() => handleEditTask(item)}
+          className="p-1"
+          accessibilityLabel="編集"
+        >
           <Icon name="pencil" size={18} color="#525252" />
         </Pressable>
-        <Pressable onPress={() => confirmRemoveOne(item.id)} className="p-1" accessibilityLabel="削除">
+        <Pressable
+          onPress={() => confirmRemoveOne(item.id)}
+          className="p-1"
+          accessibilityLabel="削除"
+        >
           <Icon name="trash-can-outline" size={18} color="#dc2626" />
         </Pressable>
       </View>
     </View>
   );
 
-  const resetDisabled = list.length === 0;
+  const resetDisabled = !list || list.length === 0;
 
   return (
     <SafeAreaView className="flex-1 bg-white">
@@ -128,14 +128,15 @@ export default function TaskListScreen({ tasks: list, setTasks: setList }) {
           onPress={confirmResetAll}
           className={`px-3 py-2 rounded-full ${resetDisabled ? 'bg-red-50' : 'bg-red-100'}`}
         >
-          <Text className={`text-xs font-semibold ${resetDisabled ? 'text-red-300' : 'text-red-600'}`}>全削除</Text>
+          <Text className={`text-xs font-semibold ${resetDisabled ? 'text-red-300' : 'text-red-600'}`}>
+            全削除
+          </Text>
         </TouchableOpacity>
       </View>
 
       <FlatList
         data={list}
         keyExtractor={(item) => item.id}
-        // refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListHeaderComponent={
           <View className="px-4 py-2 bg-zinc-50 border-y border-zinc-200">
             <View className="flex-row items-center">
