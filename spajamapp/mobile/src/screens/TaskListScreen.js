@@ -10,25 +10,25 @@ import {
   Alert,              // ← 追加
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { listTasks, clearAllTasks } from '../lib/tasksRepo';
+import { listTasks, clearAllTasks, saveTasks  } from '../lib/tasksRepo';
 
-export default function TaskListScreen() {
-  const [list, setList] = useState([]);
-  const [refreshing, setRefreshing] = useState(false);
+export default function TaskListScreen({ tasks: list, setTasks: setList }) {
+  // const [list, setList] = useState([]);
+  // const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async () => {
-    const data = await listTasks();
-    setList(data);
-  }, []);
+  // const load = useCallback(async () => {
+  //   const data = await listTasks();
+  //   setList(data);
+  // }, []);
 
-  useEffect(() => { load(); }, [load]);
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  // useEffect(() => { load(); }, [load]);
+  // useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  }, [load]);
+  // const onRefresh = useCallback(async () => {
+  //   setRefreshing(true);
+  //   await load();
+  //   setRefreshing(false);
+  // }, [load]);
 
   // ← ここが「確認アラート付き 全削除」
   const confirmResetAll = useCallback(() => {
@@ -43,13 +43,13 @@ export default function TaskListScreen() {
           style: 'destructive',
           onPress: async () => {
             await clearAllTasks();
-            await load();
+            setList([]);
           },
         },
       ],
       { cancelable: true }
     );
-  }, [list.length, load]);
+  }, [list.length, setList]);
 
   const renderItem = ({ item }) => (
     <View className="px-4 py-3 flex-row items-center">
@@ -57,11 +57,11 @@ export default function TaskListScreen() {
         className={`flex-1 text-base ${item.done ? 'text-zinc-400 line-through' : 'text-zinc-900'}`}
         numberOfLines={1}
       >
-        {item.text}
+        {item.title}
       </Text>
       <View className="w-24 items-center">
         <View className="px-2 py-1 rounded-full bg-amber-100">
-          <Text className="text-xs font-semibold text-amber-700">{item.severity}</Text>
+          <Text className="text-xs font-semibold text-amber-700">{item.priority}</Text>
         </View>
       </View>
       <View className="w-20 items-end">
@@ -95,7 +95,7 @@ export default function TaskListScreen() {
       <FlatList
         data={list}
         keyExtractor={(item) => item.id}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        // refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListHeaderComponent={
           <View className="px-4 py-2 bg-zinc-50 border-y border-zinc-200">
             <View className="flex-row items-center">
